@@ -175,6 +175,11 @@
     tbody.innerHTML = data.items
       .map((f) => {
         const shortHash = f.sha256.slice(0, 12) + "...";
+        const tagsHtml = Array.isArray(f.tags) && f.tags.length > 0
+          ? `<div class="tag-list">${f.tags
+              .map((t) => `<button type="button" class="badge badge-tag" data-tag="${escapeHtml(t)}" title="点击按此标签筛选">${escapeHtml(t)}</button>`)
+              .join("")}</div>`
+          : `<span class="muted">-</span>`;
         return `<tr>
           <td>
             <strong>${escapeHtml(f.file_name)}</strong>
@@ -183,6 +188,7 @@
           <td><span class="badge">${escapeHtml(f.project_name)}</span></td>
           <td>${escapeHtml(f.file_type)}</td>
           <td>${escapeHtml(f.version || "-")}</td>
+          <td>${tagsHtml}</td>
           <td>${formatBytes(f.file_size)}</td>
           <td>
             <code title="${escapeHtml(f.sha256)}">${escapeHtml(shortHash)}</code>
@@ -329,6 +335,13 @@
   $("btn-next-page").onclick = () => { currentOffset += pageLimit; loadFiles(); };
 
   $("files-tbody").addEventListener("click", (e) => {
+    const tagBtn = e.target.closest("[data-tag]");
+    if (tagBtn) {
+      $("filter-q").value = tagBtn.dataset.tag;
+      currentOffset = 0;
+      loadFiles();
+      return;
+    }
     const copyBtn = e.target.closest("[data-copy]");
     if (copyBtn) {
       navigator.clipboard?.writeText(copyBtn.dataset.copy);
@@ -389,7 +402,7 @@
     const project = $("upload-project").value.trim();
     const ftype = $("upload-type").value;
     const version = $("upload-version").value.trim();
-    const tags = $("upload-tags").value.trim();
+    const tags = $("upload-tags").value.trim().replace(/，/g, ",");
     const summary = $("upload-summary").value.trim();
     if (project) form.append("project", project);
     if (ftype) form.append("file_type", ftype);
