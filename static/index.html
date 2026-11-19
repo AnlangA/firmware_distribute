@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>固件与通用文件分发平台</title>
+  <link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+  <!-- Login Overlay -->
+  <div id="login-overlay" class="overlay">
+    <div class="login-card">
+      <div class="brand">
+        <div class="brand-badge">FD</div>
+        <div>
+          <h1>固件与文件分发平台</h1>
+          <p class="muted">Firmware &amp; Artifact Distribution Console</p>
+        </div>
+      </div>
+      <form id="login-form">
+        <div class="field">
+          <label for="login-ak">AccessKey ID</label>
+          <input id="login-ak" type="text" placeholder="ak_..." required autocomplete="username" />
+        </div>
+        <div class="field">
+          <label for="login-sk">AccessKey Secret</label>
+          <input id="login-sk" type="password" placeholder="sk_..." required autocomplete="current-password" />
+        </div>
+        <div id="login-error" class="alert-error hidden"></div>
+        <button type="submit" class="btn btn-primary btn-block">登录控制台</button>
+      </form>
+      <p class="hint">提示：可通过服务端 CLI <code>firmware_distribute key create --name init --scopes admin</code> 创建初始密钥。</p>
+    </div>
+  </div>
+
+  <!-- Main App Shell -->
+  <div id="app-shell" class="app-shell hidden">
+    <header class="topbar">
+      <div class="topbar-left">
+        <span class="brand-badge sm">FD</span>
+        <span class="topbar-title">固件与文件分发平台</span>
+        <nav id="main-nav" class="nav-tabs"></nav>
+      </div>
+      <div class="topbar-right">
+        <button id="btn-open-upload" class="btn btn-primary hidden">+ 上传文件</button>
+        <div class="user-chip">
+          <span id="user-name"></span>
+          <span id="user-scopes" class="scope-badges"></span>
+        </div>
+        <button id="btn-theme" class="btn btn-ghost" title="切换明暗主题">🌓</button>
+        <button id="btn-logout" class="btn btn-ghost">退出</button>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <!-- Files Tab -->
+      <section id="tab-files" class="tab-panel hidden">
+        <div class="toolbar card">
+          <input id="filter-q" type="search" placeholder="搜索文件名、摘要、标签或 SHA-256..." />
+          <select id="filter-project">
+            <option value="">全部项目</option>
+          </select>
+          <select id="filter-type">
+            <option value="">全部类型</option>
+            <option value="firmware">firmware (固件)</option>
+            <option value="doc">doc (文档)</option>
+            <option value="config">config (配置)</option>
+            <option value="other">other (其他)</option>
+          </select>
+          <input id="filter-ext" type="text" placeholder="扩展名 如 .bin" class="short-input" />
+          <select id="filter-sort">
+            <option value="created_at_desc">最新上传</option>
+            <option value="created_at_asc">最早上传</option>
+            <option value="file_size_desc">体积从大到小</option>
+            <option value="file_size_asc">体积从小到大</option>
+            <option value="file_name_asc">文件名 A-Z</option>
+          </select>
+          <button id="btn-refresh-files" class="btn btn-secondary">刷新</button>
+        </div>
+
+        <div class="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>文件名</th>
+                <th>项目</th>
+                <th>类型</th>
+                <th>版本</th>
+                <th>大小</th>
+                <th>SHA-256</th>
+                <th>上传时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="files-tbody"></tbody>
+          </table>
+          <div id="files-empty" class="empty-state hidden">暂无匹配的文件</div>
+          <div class="pagination">
+            <span id="files-total" class="muted"></span>
+            <div class="page-actions">
+              <button id="btn-prev-page" class="btn btn-ghost">上一页</button>
+              <button id="btn-next-page" class="btn btn-ghost">下一页</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Projects Tab -->
+      <section id="tab-projects" class="tab-panel hidden">
+        <div class="toolbar card">
+          <input id="project-search" type="search" placeholder="搜索项目名称或 slug..." />
+          <button id="btn-refresh-projects" class="btn btn-secondary">刷新</button>
+        </div>
+        <div id="projects-grid" class="projects-grid"></div>
+      </section>
+
+      <!-- Write-only landing notice -->
+      <section id="tab-write-only" class="tab-panel hidden">
+        <div class="card empty-card">
+          <h2>仅上传权限（Write Scope）</h2>
+          <p class="muted">当前密钥仅包含 <code>write</code> 权限，可上传文件到指定项目或默认 <code>public</code> 项目，无权浏览或下载文件。</p>
+          <button id="btn-write-only-upload" class="btn btn-primary">立即上传文件</button>
+        </div>
+      </section>
+
+      <!-- Keys Tab -->
+      <section id="tab-keys" class="tab-panel hidden">
+        <div class="toolbar card space-between">
+          <div>
+            <strong>API 密钥管理</strong>
+            <span class="muted">（ak:sk HTTP Basic Auth，权限严格隔离）</span>
+          </div>
+          <button id="btn-open-create-key" class="btn btn-primary">+ 创建密钥</button>
+        </div>
+        <div class="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>名称</th>
+                <th>AccessKey ID</th>
+                <th>权限 (Scopes)</th>
+                <th>状态</th>
+                <th>创建时间</th>
+                <th>最后使用</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="keys-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Audit Tab -->
+      <section id="tab-audit" class="tab-panel hidden">
+        <div class="toolbar card space-between">
+          <div>
+            <strong>审计日志</strong>
+          </div>
+          <div class="inline-group">
+            <select id="audit-action-filter">
+              <option value="">全部动作</option>
+              <option value="file.upload">file.upload</option>
+              <option value="file.delete">file.delete</option>
+              <option value="key.create">key.create</option>
+              <option value="key.revoke">key.revoke</option>
+            </select>
+            <button id="btn-refresh-audit" class="btn btn-secondary">刷新</button>
+          </div>
+        </div>
+        <div class="card table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>操作者</th>
+                <th>动作</th>
+                <th>目标</th>
+                <th>详情</th>
+                <th>时间</th>
+              </tr>
+            </thead>
+            <tbody id="audit-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Upload Modal -->
+  <div id="upload-modal" class="overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>上传文件 / 固件</h3>
+        <button id="btn-close-upload" class="btn btn-ghost">✕</button>
+      </div>
+      <form id="upload-form">
+        <div id="dropzone" class="dropzone">
+          <input id="upload-files-input" type="file" multiple class="hidden" />
+          <p>拖拽文件到此处，或 <button type="button" id="btn-pick-files" class="link-btn">点击选择文件</button>（支持多选）</p>
+          <div id="selected-files-list" class="selected-files"></div>
+        </div>
+        <div class="form-grid">
+          <div class="field">
+            <label for="upload-project">所属项目（留空归入 public）</label>
+            <input id="upload-project" type="text" placeholder="如 Motor_X1 或 中文项目名" />
+          </div>
+          <div class="field">
+            <label for="upload-type">文件类型（留空自动推断）</label>
+            <select id="upload-type">
+              <option value="">自动推断</option>
+              <option value="firmware">firmware</option>
+              <option value="doc">doc</option>
+              <option value="config">config</option>
+              <option value="other">other</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="upload-version">版本号（可选）</label>
+            <input id="upload-version" type="text" placeholder="如 v1.2.3" />
+          </div>
+          <div class="field">
+            <label for="upload-tags">标签（逗号分隔，可选）</label>
+            <input id="upload-tags" type="text" placeholder="如 release, stm32" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="upload-summary">摘要说明（可选）</label>
+          <input id="upload-summary" type="text" placeholder="本次发布说明或变更摘要" />
+        </div>
+        <div id="upload-progress-wrap" class="progress-wrap hidden">
+          <div class="progress-bar"><div id="upload-progress-fill" class="progress-fill"></div></div>
+          <span id="upload-progress-text" class="muted">0%</span>
+        </div>
+        <div id="upload-error" class="alert-error hidden"></div>
+        <div class="modal-actions">
+          <button type="button" id="btn-cancel-upload" class="btn btn-ghost">取消</button>
+          <button type="submit" id="btn-submit-upload" class="btn btn-primary">开始上传</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Create Key Modal -->
+  <div id="key-modal" class="overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>创建 API 密钥</h3>
+        <button id="btn-close-key-modal" class="btn btn-ghost">✕</button>
+      </div>
+      <form id="create-key-form">
+        <div class="field">
+          <label for="new-key-name">密钥名称</label>
+          <input id="new-key-name" type="text" placeholder="如 ci-builder 或 factory-line-1" required />
+        </div>
+        <div class="field">
+          <label>权限 Scopes（严格隔离：write 不自动包含 read）</label>
+          <div class="checkbox-row">
+            <label><input type="checkbox" name="scope" value="read" /> read</label>
+            <label><input type="checkbox" name="scope" value="write" /> write</label>
+            <label><input type="checkbox" name="scope" value="admin" /> admin</label>
+          </div>
+        </div>
+        <div id="create-key-error" class="alert-error hidden"></div>
+        <div class="modal-actions">
+          <button type="button" id="btn-cancel-key-modal" class="btn btn-ghost">关闭</button>
+          <button type="submit" class="btn btn-primary">生成密钥</button>
+        </div>
+      </form>
+      <div id="created-key-result" class="secret-box hidden">
+        <p><strong>密钥已生成（Secret 仅显示一次，请立即保存）：</strong></p>
+        <div class="secret-line">AccessKey ID: <code id="res-ak"></code></div>
+        <div class="secret-line">AccessKey Secret: <code id="res-sk"></code></div>
+        <p class="muted" style="margin-top:8px">CLI 上传示例：</p>
+        <pre id="res-curl"></pre>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="/assets/app.js"></script>
+</body>
+</html>
